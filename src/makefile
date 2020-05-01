@@ -32,7 +32,7 @@ STD    = -std=gnu11
 LIBS   = -pthread -lm
 WARN   = -Wall -Wextra -Wshadow
 
-CFLAGS = $(STD) $(WARN) -O3 -flto -march=native
+CFLAGS = $(STD) $(WARN) -O3 -flto -march=native -g
 RFLAGS = $(STD) $(WARN) -O3 -flto -static
 PFLAGS = $(STD) $(WARN) -O0 -march=native -pg -p
 
