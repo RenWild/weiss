@@ -100,7 +100,7 @@ bool MoveIsPseudoLegal(const Position *pos, const Move move) {
 
     bool pl = InternalMoveIsPseudoLegal(pos, move);
 
-    if (pl) {
+    if (!pl) {
         MoveList list[1];
         GenAllMoves2(pos, list);
 
@@ -110,7 +110,7 @@ bool MoveIsPseudoLegal(const Position *pos, const Move move) {
             if (list->moves[i].move == move)
                 generated = true;
 
-        if (!generated) {
+        if (generated) {
             PrintBoard(pos);
             printf("Move: %s\n", MoveToStr(move));
             printf("%u\n", move);
