@@ -113,6 +113,7 @@ bool MoveIsPseudoLegal(const Position *pos, const Move move) {
         if (!generated) {
             PrintBoard(pos);
             printf("Move: %s\n", MoveToStr(move));
+            printf("%u\n", move);
             fflush(stdout);
             exit(EXIT_SUCCESS);
         }
