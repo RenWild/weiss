@@ -78,6 +78,8 @@ static void PrepareSearch(Position *pos, SearchInfo *info) {
 
     // Mark TT as used
     TT.dirty = true;
+
+    ABORT_SIGNAL = false;
 }
 
 // Translates an internal mate score into distance to mate
