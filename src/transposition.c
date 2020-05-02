@@ -38,7 +38,7 @@ TTEntry* ProbeTT(const Key posKey, bool *ttHit) {
 
     TTEntry* tte = GetEntry(posKey);
 
-    *ttHit = tte->posKey == posKey;
+    *ttHit = true;
 
     return tte;
 }

@@ -26,8 +26,17 @@
 #include "transposition.h"
 
 
+// Generate all pseudo legal moves
+void GenAllMoves2(const Position *pos, MoveList *list) {
+
+    list->count = list->next = 0;
+
+    GenNoisyMoves(pos, list);
+    GenQuietMoves(pos, list);
+}
+
 // Checks whether a move is pseudo-legal (assuming it is pseudo-legal in some position)
-bool MoveIsPseudoLegal(const Position *pos, const Move move) {
+bool InternalMoveIsPseudoLegal(const Position *pos, const Move move) {
 
     if (!move) return false;
 
@@ -85,6 +94,31 @@ bool MoveIsPseudoLegal(const Position *pos, const Move move) {
             && (to + 16 - 32 * color) == from;
 
     return false; // Unreachable
+}
+
+bool MoveIsPseudoLegal(const Position *pos, const Move move) {
+
+    bool pl = InternalMoveIsPseudoLegal(pos, move);
+
+    if (pl) {
+        MoveList list[1];
+        GenAllMoves2(pos, list);
+
+        bool generated = false;
+
+        for (int i = 0; i < list->count; ++i)
+            if (list->moves[i].move == move)
+                generated = true;
+
+        if (!generated) {
+            PrintBoard(pos);
+            printf("Move: %s\n", MoveToStr(move));
+            fflush(stdout);
+            exit(EXIT_SUCCESS);
+        }
+    }
+
+    return pl;
 }
 
 // Translates a move to a string
