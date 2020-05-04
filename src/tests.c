@@ -93,7 +93,11 @@ static void RecursivePerft(Position *pos, const Depth depth) {
 
     for (int i = 0; i < list->count; ++i) {
 
-        if (!MakeMove(pos, list->moves[i].move)) continue;
+        Move move = list->moves[i].move;
+
+        if (!MoveIsLegal(pos, move)) continue;
+
+        MakeMove(pos, move);
         RecursivePerft(pos, depth - 1);
         TakeMove(pos);
     }
@@ -123,11 +127,13 @@ void Perft(char *line) {
 
         Move move = list->moves[i].move;
 
-        if (!MakeMove(pos, move)){
+        if (!MoveIsLegal(pos, move)) {
             printf("move %d : %s : Illegal\n", i + 1, MoveToStr(move));
             fflush(stdout);
             continue;
         }
+
+        MakeMove(pos, move);
 
         uint64_t oldCount = leafNodes;
         RecursivePerft(pos, depth - 1);
