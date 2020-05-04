@@ -205,7 +205,9 @@ static int Quiescence(Position *pos, SearchInfo *info, int alpha, const int beta
             continue;
 
         // Recursively search the positions after making the moves, skipping illegal ones
-        if (!MakeMove(pos, move)) continue;
+        if (!MoveIsLegal(pos, move)) continue;
+
+        MakeMove(pos, move);
         score = -Quiescence(pos, info, -beta, -alpha);
         TakeMove(pos);
 
@@ -389,8 +391,10 @@ move_loop:
 
         __builtin_prefetch(GetEntry(KeyAfter(pos, move)));
 
+        if (!MoveIsLegal(pos, move)) continue;
+
         // Make the move, skipping to the next if illegal
-        if (!MakeMove(pos, move)) continue;
+        MakeMove(pos, move);
 
         // Increment counts
         moveCount++;

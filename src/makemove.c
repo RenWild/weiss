@@ -186,7 +186,7 @@ void TakeMove(Position *pos) {
 }
 
 // Make a move - take it back and return false if move was illegal
-bool MakeMove(Position *pos, const Move move) {
+void MakeMove(Position *pos, const Move move) {
 
     // Save position
     history(0).posKey         = pos->key;
@@ -268,13 +268,7 @@ bool MakeMove(Position *pos, const Move move) {
     sideToMove ^= 1;
     HASH_SIDE;
 
-    // If own king is attacked after the move, take it back immediately
-    if (KingAttacked(pos, sideToMove^1))
-        return TakeMove(pos), false;
-
     assert(PositionOk(pos));
-
-    return true;
 }
 
 // Pass the turn without moving
