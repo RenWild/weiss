@@ -105,7 +105,6 @@ enum {
 extern const Bitboard FileBB[8];
 extern const Bitboard RankBB[8];
 
-extern Bitboard SquareBB[64];
 extern Bitboard BetweenBB[64][64];
 
 extern Magic BishopTable[64];
@@ -172,6 +171,12 @@ INLINE bool Multiple(Bitboard bb) {
 INLINE bool Single(Bitboard bb) {
 
     return bb && !Multiple(bb);
+}
+
+INLINE Bitboard SquareBB(const Square sq) {
+
+    assert(sq <= H8);
+    return 1ull << sq;
 }
 
 // Returns the attack bitboard for a piece of piecetype on square sq

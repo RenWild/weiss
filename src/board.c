@@ -152,9 +152,9 @@ static void UpdatePosition(Position *pos) {
             PieceType pt = PieceTypeOf(piece);
 
             // Bitboards
-            pieceBB(ALL)   |= SquareBB[sq];
-            pieceBB(pt)    |= SquareBB[sq];
-            colorBB(color) |= SquareBB[sq];
+            pieceBB(ALL)   |= SquareBB(sq);
+            pieceBB(pt)    |= SquareBB(sq);
+            colorBB(color) |= SquareBB(sq);
 
             // Non pawn piece count
             pos->nonPawnCount[color] += NonPawn[piece];

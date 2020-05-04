@@ -36,8 +36,8 @@ bool MoveIsPseudoLegal(const Position *pos, const Move move) {
     const Square to = toSq(move);
 
     // Must move our own piece to a square not occupied by our own pieces
-    if (  !(colorBB(color) & SquareBB[from])
-        || (colorBB(color) & SquareBB[to])
+    if (  !(colorBB(color) & SquareBB(from))
+        || (colorBB(color) & SquareBB(to))
         || capturing(move) != pieceOn(to))
         return false;
 
@@ -54,7 +54,7 @@ bool MoveIsPseudoLegal(const Position *pos, const Move move) {
                 && !promotion(move))
                 return false;
 
-            return (moveIsCapture(move)) ? SquareBB[to] & PawnAttackBB(color, from)
+            return (moveIsCapture(move)) ? SquareBB(to) & PawnAttackBB(color, from)
                                          : (to + 8 - 16 * color) == from;
         }
 
@@ -62,7 +62,7 @@ bool MoveIsPseudoLegal(const Position *pos, const Move move) {
             return false;
 
         // Normal moves by any other piece
-        return SquareBB[to] & AttackBB(PieceTypeOf(pieceOn(from)), from, pieceBB(ALL));
+        return SquareBB(to) & AttackBB(PieceTypeOf(pieceOn(from)), from, pieceBB(ALL));
     }
 
     if (moveIsCastle(move))
@@ -77,7 +77,7 @@ bool MoveIsPseudoLegal(const Position *pos, const Move move) {
     if (moveIsEnPas(move))
         return PieceTypeOf(pieceOn(from)) == PAWN
             && to == pos->epSquare
-            && SquareBB[to] & PawnAttackBB(color, from);
+            && SquareBB(to) & PawnAttackBB(color, from);
 
     if (moveIsPStart(move))
         return PieceTypeOf(pieceOn(from)) == PAWN

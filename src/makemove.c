@@ -67,9 +67,9 @@ static void ClearPiece(Position *pos, const Square sq, const bool hash) {
     pos->nonPawnCount[color] -= NonPawn[piece];
 
     // Update bitboards
-    pieceBB(ALL)   ^= SquareBB[sq];
-    pieceBB(pt)    ^= SquareBB[sq];
-    colorBB(color) ^= SquareBB[sq];
+    pieceBB(ALL)   ^= SquareBB(sq);
+    pieceBB(pt)    ^= SquareBB(sq);
+    colorBB(color) ^= SquareBB(sq);
 }
 
 // Add a piece piece to a square
@@ -96,9 +96,9 @@ static void AddPiece(Position *pos, const Square sq, const Piece piece, const bo
     pos->nonPawnCount[color] += NonPawn[piece];
 
     // Update bitboards
-    pieceBB(ALL)   |= SquareBB[sq];
-    pieceBB(pt)    |= SquareBB[sq];
-    colorBB(color) |= SquareBB[sq];
+    pieceBB(ALL)   |= SquareBB(sq);
+    pieceBB(pt)    |= SquareBB(sq);
+    colorBB(color) |= SquareBB(sq);
 }
 
 // Move a piece from one square to another
@@ -124,9 +124,9 @@ static void MovePiece(Position *pos, const Square from, const Square to, const b
     pos->material += PSQT[piece][to] - PSQT[piece][from];
 
     // Update bitboards
-    pieceBB(ALL)   ^= SquareBB[from] ^ SquareBB[to];
-    pieceBB(pt)    ^= SquareBB[from] ^ SquareBB[to];
-    colorBB(color) ^= SquareBB[from] ^ SquareBB[to];
+    pieceBB(ALL)   ^= SquareBB(from) ^ SquareBB(to);
+    pieceBB(pt)    ^= SquareBB(from) ^ SquareBB(to);
+    colorBB(color) ^= SquareBB(from) ^ SquareBB(to);
 }
 
 // Take back the previous move
