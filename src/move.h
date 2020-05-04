@@ -88,5 +88,6 @@ INLINE bool CastlePseudoLegal(const Position *pos, Color color, int side) {
 }
 
 bool MoveIsPseudoLegal(const Position *pos, Move move);
+bool MoveIsLegal(const Position *pos, Move move);
 char *MoveToStr(Move move);
 Move ParseMove(const char *ptrChar, const Position *pos);
