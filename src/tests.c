@@ -17,6 +17,7 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "board.h"
@@ -26,6 +27,7 @@
 #include "movegen.h"
 #include "psqt.h"
 #include "search.h"
+#include "threads.h"
 #include "time.h"
 #include "transposition.h"
 
@@ -34,36 +36,73 @@
 
 
 /* Benchmark heavily inspired by Ethereal*/
+
 static const char *BenchmarkFENs[] = {
     #include "bench.csv"
-    ""
 };
 
-void Benchmark(Position *pos, SearchInfo *info, Depth depth) {
+typedef struct BenchResult {
 
-    uint64_t nodes = 0;
+    TimePoint elapsed;
+    uint64_t nodes;
+    int score;
+    Move best;
 
-    Limits.depth = depth;
+} BenchResult;
+
+void Benchmark(int argc, char **argv) {
+
+    // Default depth 15, 1 thread, and 32MB hash
     Limits.timelimit = false;
+    Limits.depth     = argc > 2 ? atoi(argv[2]) : 15;
+    int threadCount  = argc > 3 ? atoi(argv[3]) : 1;
+    TT.requestedMB   = argc > 4 ? atoi(argv[4]) : DEFAULTHASH;
 
-    TimePoint start = Now();
+    Position pos;
+    Thread *threads = InitThreads(threadCount);
+    InitTT(threads);
 
-    for (int i = 0; strcmp(BenchmarkFENs[i], ""); ++i) {
-        printf("Bench %d: %s\n", i + 1, BenchmarkFENs[i]);
-        ParseFen(BenchmarkFENs[i], pos);
+    int FENCount = sizeof(BenchmarkFENs) / sizeof(char *);
+    BenchResult results[FENCount];
+    TimePoint totalElapsed = 1; // Avoid possible div/0
+    uint64_t totalNodes = 0;
+
+    for (int i = 0; i < FENCount; ++i) {
+
+        printf("[# %2d] %s\n", i + 1, BenchmarkFENs[i]);
+
+        // Search
+        ParseFen(BenchmarkFENs[i], &pos);
+        ABORT_SIGNAL = false;
         Limits.start = Now();
-        SearchPosition(pos, info);
-        nodes += info->nodes;
-        ClearTT();
+        SearchPosition(&pos, threads);
+
+        // Collect results
+        BenchResult *r = &results[i];
+        r->elapsed = TimeSince(Limits.start);
+        r->nodes   = TotalNodes(threads);
+        r->score   = threads->score;
+        r->best    = threads->bestMove;
+
+        totalElapsed += r->elapsed;
+        totalNodes   += r->nodes;
+
+        ClearTT(threads);
     }
 
-    TimePoint elapsed = TimeSince(start) + 1;
+    puts("======================================================");
 
-    printf("Benchmark complete:"
-           "\nTime : %" PRId64 "ms"
-           "\nNodes: %" PRIu64
-           "\nNPS  : %" PRId64 "\n",
-           elapsed, nodes, 1000 * nodes / elapsed);
+    for (int i = 0; i < FENCount; ++i) {
+        BenchResult *r = &results[i];
+        printf("[# %2d] %5d cp  %5s %10" PRIu64 " nodes %10d nps\n",
+               i+1, r->score, MoveToStr(r->best), r->nodes,
+               (int)(1000.0 * r->nodes / (r->elapsed + 1)));
+    }
+
+    puts("======================================================");
+
+    printf("OVERALL: %7" PRIi64 " ms %13" PRIu64 " nodes %10d nps\n",
+           totalElapsed, totalNodes, (int)(1000.0 * totalNodes / totalElapsed));
 }
 
 #ifdef DEV

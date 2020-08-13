@@ -30,7 +30,7 @@
 #include "transposition.h"
 
 
-TranspositionTable TT;
+TranspositionTable TT = { .requestedMB = DEFAULTHASH };
 
 
 // Probe the transposition table
@@ -77,18 +77,45 @@ int HashFull() {
     return used / (samples / 1000);
 }
 
+static void *ThreadClearTT(void *voidThread) {
+
+    Thread *thread = voidThread;
+
+    // Logic for dividing the work taken from CFish
+    size_t twoMB  = 2 * 1024 * 1024;
+    size_t total  = TT.count * sizeof(TTEntry);
+    size_t slice  = (total + thread->count - 1) / thread->count;
+    size_t blocks = (slice + twoMB - 1) / twoMB;
+    size_t begin  = thread->index * blocks * twoMB;
+    size_t end    = begin + blocks * twoMB;
+    begin = MIN(begin, total);
+    end   = MIN(end, total);
+
+    memset(TT.table + begin / sizeof(TTEntry), 0, end - begin);
+
+    return NULL;
+}
+
 // Clears the transposition table
-void ClearTT() {
+void ClearTT(Thread *threads) {
 
     if (!TT.dirty) return;
 
-    memset(TT.table, 0, TT.count * sizeof(TTEntry));
+    // Spawn each thread to clear a part of the TT each
+    for (int i = 0; i < threads->count; ++i)
+        pthread_create(&threads->pthreads[i], NULL, &ThreadClearTT, &threads[i]);
+
+    // Wait for them to finish
+    for (int i = 0; i < threads->count; ++i)
+        pthread_join(threads->pthreads[i], NULL);
+
+    threads->pthreads[0] = 0;
 
     TT.dirty = false;
 }
 
 // Allocates memory for the transposition table
-void InitTT() {
+void InitTT(Thread *threads) {
 
     // Ignore if already correct size
     if (TT.currentMB == TT.requestedMB)
@@ -124,15 +151,8 @@ void InitTT() {
 
     // Ensure the memory is 0'ed out
     TT.dirty = true;
-    ClearTT();
+    ClearTT(threads);
 
     printf("HashTable init complete with %" PRI_SIZET " entries, using %" PRI_SIZET "MB.\n", TT.count, MB);
     fflush(stdout);
-}
-
-// Free allocated memory (if any) before exiting
-DESTR FreeTT() {
-
-    if (TT.mem)
-        free(TT.mem);
 }

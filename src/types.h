@@ -19,6 +19,7 @@
 #pragma once
 
 #include <inttypes.h>
+#include <pthread.h>
 #include <setjmp.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -44,12 +45,11 @@
 
 #define INLINE static inline __attribute__((always_inline))
 #define CONSTR static __attribute__((constructor)) void
-#define DESTR static __attribute__((destructor)) void
 
 #define lastMoveNullMove (!root && history(-1).move == NOMOVE)
-#define history(offset) (pos->gameHistory[pos->gamePly + offset])
-#define killer1 (pos->killers[pos->ply][0])
-#define killer2 (pos->killers[pos->ply][1])
+#define history(offset) (pos->gameHistory[pos->histPly + offset])
+#define killer1 (thread->killers[pos->ply][0])
+#define killer2 (thread->killers[pos->ply][1])
 
 #define pieceBB(type) (pos->pieceBB[(type)])
 #define colorBB(color) (pos->colorBB[(color)])
@@ -79,10 +79,10 @@ enum Limit {
 
 enum Score {
     TBWIN        = 30000,
-    TBWIN_IN_MAX = TBWIN - MAXDEPTH,
+    TBWIN_IN_MAX = TBWIN - 999,
 
-    MATE        = TBWIN + MAXDEPTH + 1,
-    MATE_IN_MAX = MATE - MAXDEPTH,
+    MATE        = 31000,
+    MATE_IN_MAX = MATE - 999,
 
     INFINITE = MATE + 1,
     NOSCORE  = MATE + 2,
@@ -93,11 +93,11 @@ enum Color {
 };
 
 enum PieceType {
-    NO_TYPE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, TYPE_NB = 8
+    ALL, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, TYPE_NB = 8
 };
 
 enum Piece {
-    EMPTY = 0, ALL = 0, PIECE_MIN,
+    EMPTY,
     bP = 1, bN, bB, bR, bQ, bK,
     wP = 9, wN, wB, wR, wQ, wK,
     PIECE_NB = 16
@@ -131,7 +131,7 @@ enum Square {
     A5, B5, C5, D5, E5, F5, G5, H5,
     A6, B6, C6, D6, E6, F6, G6, H6,
     A7, B7, C7, D7, E7, F7, G7, H7,
-    A8, B8, C8, D8, E8, F8, G8, H8, NO_SQ = 99
+    A8, B8, C8, D8, E8, F8, G8, H8
 };
 
 typedef enum Direction {
@@ -181,7 +181,7 @@ typedef struct {
     int eval;
 } History;
 
-typedef struct {
+typedef struct Position {
 
     uint8_t board[64];
     Bitboard pieceBB[TYPE_NB];
@@ -199,18 +199,16 @@ typedef struct {
     uint8_t castlingRights;
 
     uint8_t ply;
-    uint16_t gamePly;
+    uint16_t histPly;
+    uint16_t gameMoves;
 
     Key key;
 
     History gameHistory[MAXGAMEMOVES];
 
-    int history[PIECE_NB][64];
-    Move killers[MAXDEPTH][2];
-
 } Position;
 
-typedef struct {
+typedef struct Thread {
 
     uint64_t nodes;
     uint64_t tbhits;
@@ -225,7 +223,20 @@ typedef struct {
 
     jmp_buf jumpBuffer;
 
-} SearchInfo;
+    int history[PIECE_NB][64];
+    Move killers[MAXDEPTH][2];
+
+    // Anything below here is not zeroed out between searches
+    Position pos;
+
+    int index;
+    int count;
+
+    pthread_mutex_t mutex;
+    pthread_cond_t sleepCondition;
+    pthread_t *pthreads;
+
+} Thread;
 
 typedef struct {
 

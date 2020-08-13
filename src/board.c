@@ -70,7 +70,7 @@ CONSTR InitHashKeys() {
     SideKey = Rand64();
 
     // En passant
-    for (Square sq = A1; sq <= H8; ++sq)
+    for (Square sq = A3; sq <= H6; ++sq)
         PieceKeys[0][sq] = Rand64();
 
     // White pieces
@@ -106,8 +106,7 @@ static Key GeneratePosKey(const Position *pos) {
         posKey ^= SideKey;
 
     // En passant
-    if (pos->epSquare != NO_SQ)
-        posKey ^= PieceKeys[EMPTY][pos->epSquare];
+    posKey ^= PieceKeys[EMPTY][pos->epSquare];
 
     // Castling rights
     posKey ^= CastleKeys[pos->castlingRights];
@@ -134,7 +133,7 @@ Key KeyAfter(const Position *pos, const Move move) {
 // Clears the board
 static void ClearPosition(Position *pos) {
 
-    memset(pos, EMPTY, sizeof(Position));
+    memset(pos, 0, sizeof(Position));
 }
 
 // Update the rest of a position to match pos->board
@@ -242,12 +241,11 @@ void ParseFen(const char *fen, Position *pos) {
     Square ep = AlgebraicToSq(fen[0], fen[1]);
     bool epValid = *fen != '-' && (  PawnAttackBB(!sideToMove, ep)
                                    & colorPieceBB(sideToMove, PAWN));
-    pos->epSquare = epValid ? ep
-                            : NO_SQ;
-    fen += 2;
+    pos->epSquare = epValid ? ep : 0;
 
-    // 50 move rule
-    pos->rule50 = atoi(fen);
+    // 50 move rule and game moves
+    pos->rule50 = atoi(fen += 2);
+    pos->gameMoves = atoi(fen += 2);
 
     // Generate the position key
     pos->key = GeneratePosKey(pos);
@@ -255,15 +253,14 @@ void ParseFen(const char *fen, Position *pos) {
     assert(PositionOk(pos));
 }
 
-#if defined DEV || !defined NDEBUG
-// Print the board with misc info
-void PrintBoard(const Position *pos) {
+// Translates a move to a string
+char *BoardToFen(const Position *pos) {
 
     const char PceChar[]  = ".pnbrqk..PNBRQK";
-    char fen[100];
+    static char fen[100];
     char *ptr = fen;
 
-    printf("\n");
+    // Board
     for (int rank = RANK_8; rank >= RANK_1; --rank) {
 
         int count = 0;
@@ -272,7 +269,6 @@ void PrintBoard(const Position *pos) {
             Square sq = (rank * 8) + file;
             Piece piece = pieceOn(sq);
 
-            // Build fen string
             if (piece) {
                 if (count)
                     *ptr++ = '0' + count;
@@ -280,22 +276,19 @@ void PrintBoard(const Position *pos) {
                 count = 0;
             } else
                 count++;
-
-            // Print board
-            printf("%3c", PceChar[piece]);
         }
 
         if (count)
             *ptr++ = '0' + count;
 
         *ptr++ = rank == RANK_1 ? ' ' : '/';
-
-        printf("\n");
     }
 
+    // Side to move
     *ptr++ = sideToMove == WHITE ? 'w' : 'b';
     *ptr++ = ' ';
 
+    // Castling rights
     int cr = pos->castlingRights;
     if (!cr)
         *ptr++ = '-';
@@ -306,12 +299,37 @@ void PrintBoard(const Position *pos) {
         if (cr & BLACK_OOO) *ptr++ = 'q';
     }
 
+    // En passant square in a separate string
     char ep[3] = "-";
-    if (pos->epSquare != NO_SQ)
+    if (pos->epSquare)
         ep[0] = 'a' + FileOf(pos->epSquare),
         ep[1] = '1' + RankOf(pos->epSquare);
 
-    printf("\n%s %s %d %d\n", fen, ep, pos->rule50, pos->gamePly + 1);
+    // Add en passant, 50mr and game ply to the base
+    sprintf(ptr, " %s %d %d", ep, pos->rule50, pos->gameMoves);
+
+    return fen;
+}
+
+#if defined DEV || !defined NDEBUG
+// Print the board with misc info
+void PrintBoard(const Position *pos) {
+
+    const char PceChar[]  = ".pnbrqk..PNBRQK";
+
+    // Print board
+    printf("\n");
+    for (int rank = RANK_8; rank >= RANK_1; --rank) {
+        for (int file = FILE_A; file <= FILE_H; ++file) {
+            Square sq = (rank * 8) + file;
+            printf("%3c", PceChar[pieceOn(sq)]);
+        }
+        printf("\n");
+    }
+    printf("\n");
+
+    // Print FEN and zobrist key
+    puts(BoardToFen(pos));
     printf("Zobrist Key: %" PRIu64 "\n\n", pos->key);
     fflush(stdout);
 }
@@ -321,7 +339,7 @@ void PrintBoard(const Position *pos) {
 // Check board state makes sense
 bool PositionOk(const Position *pos) {
 
-    assert(0 <= pos->gamePly && pos->gamePly < MAXGAMEMOVES);
+    assert(0 <= pos->histPly && pos->histPly < MAXGAMEMOVES);
     assert(    0 <= pos->ply && pos->ply < MAXDEPTH);
 
     int counts[PIECE_NB] = { 0 };
@@ -359,7 +377,7 @@ bool PositionOk(const Position *pos) {
 
     assert(sideToMove == WHITE || sideToMove == BLACK);
 
-    assert(pos->epSquare == NO_SQ
+    assert(!pos->epSquare
        || (RelativeRank(sideToMove, RankOf(pos->epSquare)) == RANK_6));
 
     assert(pos->castlingRights >= 0
@@ -383,7 +401,7 @@ void MirrorBoard(Position *pos) {
         board[sq] = MirrorPiece(pieceOn(MirrorSquare(sq)));
 
     Color stm = !sideToMove;
-    Square ep = pos->epSquare == NO_SQ ? NO_SQ : MirrorSquare(pos->epSquare);
+    Square ep = pos->epSquare == 0 ? 0 : MirrorSquare(pos->epSquare);
     uint8_t cr = (pos->castlingRights & WHITE_CASTLE) << 2
                | (pos->castlingRights & BLACK_CASTLE) >> 2;
 

@@ -16,15 +16,10 @@
   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#pragma once
-
-#include "types.h"
+#include "../types.h"
 
 
-void Benchmark(int argc, char **argv);
+extern int failedQueries;
 
-#ifdef DEV
-void Perft(char *line);
-void PrintEval(Position *pos);
-void MirrorEvalTest(Position *pos);
-#endif
+
+bool ProbeNoob(Position *pos, Thread *threads);

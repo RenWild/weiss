@@ -18,13 +18,9 @@
 
 #pragma once
 
-#include "types.h"
 
-
-void Benchmark(int argc, char **argv);
-
-#ifdef DEV
-void Perft(char *line);
-void PrintEval(Position *pos);
-void MirrorEvalTest(Position *pos);
-#endif
+Thread *InitThreads(int threadCount);
+uint64_t TotalNodes(const Thread *threads);
+uint64_t TotalTBHits(const Thread *threads);
+void Wait(Thread *thread, volatile bool *condition);
+void Wake(Thread *thread);

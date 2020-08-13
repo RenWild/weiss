@@ -22,7 +22,7 @@
 #include <string.h>
 
 
-#define NAME "Weiss 0.10-dev"
+#define NAME "Weiss 1.0"
 
 #define START_FEN "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 #define INPUT_SIZE 4096
@@ -30,11 +30,28 @@
 
 typedef struct {
 
-    Position *pos;
-    SearchInfo *info;
-    char str[4096];
+    Position pos;
+    Thread *threads;
 
-} GoInfo;
+} Engine;
+
+
+enum InputCommands {
+    // UCI
+    GO          = 11,
+    UCI         = 127,
+    STOP        = 28,
+    QUIT        = 29,
+    ISREADY     = 113,
+    POSITION    = 17,
+    SETOPTION   = 96,
+    UCINEWGAME  = 6,
+    // Non-UCI
+    EVAL        = 26,
+    PRINT       = 112,
+    PERFT       = 116,
+    MIRRORTEST  = 4
+};
 
 
 // Reads a line from stdin and strips newline
@@ -71,3 +88,6 @@ INLINE void SetLimit(const char *str, const char *token, int *limit) {
     if ((ptr = strstr(str, token)))
         *limit = atoi(ptr + strlen(token));
 }
+
+void PrintThinking(const Thread *thread, int score, int alpha, int beta);
+void PrintConclusion(const Thread *thread);

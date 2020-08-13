@@ -132,8 +132,8 @@ static void MovePiece(Position *pos, const Square from, const Square to, const b
 // Take back the previous move
 void TakeMove(Position *pos) {
 
-    // Decrement gamePly, ply
-    pos->gamePly--;
+    // Decrement histPly, ply
+    pos->histPly--;
     pos->ply--;
 
     // Change side to play
@@ -154,8 +154,7 @@ void TakeMove(Position *pos) {
             case C1: MovePiece(pos, D1, A1, false); break;
             case C8: MovePiece(pos, D8, A8, false); break;
             case G1: MovePiece(pos, F1, H1, false); break;
-            case G8: MovePiece(pos, F8, H8, false); break;
-            default: assert(false); break;
+            default: MovePiece(pos, F8, H8, false); break;
         }
 
     // Make reverse move (from <-> to)
@@ -195,36 +194,22 @@ bool MakeMove(Position *pos, const Move move) {
     history(0).rule50         = pos->rule50;
     history(0).castlingRights = pos->castlingRights;
 
-    // Increment gamePly, ply and 50mr
-    pos->gamePly++;
+    // Increment histPly, ply and 50mr
+    pos->histPly++;
     pos->ply++;
     pos->rule50++;
 
-    // Hash out the old en passant if exist and unset it
-    if (pos->epSquare != NO_SQ)
-        HASH_EP,
-        pos->epSquare = NO_SQ;
+    // Hash out en passant if there was one, and unset it
+    HASH_EP;
+    pos->epSquare = 0;
 
     const Square from = fromSq(move);
     const Square to = toSq(move);
 
-    // Rehash the castling rights if at least one side can castle,
-    // and either the to or from square is the original square of
-    // a king or rook.
-    if (pos->castlingRights && CastlePerm[from] ^ CastlePerm[to])
-        HASH_CA,
-        pos->castlingRights &= CastlePerm[from] & CastlePerm[to],
-        HASH_CA;
-
-    // Move the rook during castling
-    if (moveIsCastle(move))
-        switch (to) {
-            case C1: MovePiece(pos, A1, D1, true); break;
-            case C8: MovePiece(pos, A8, D8, true); break;
-            case G1: MovePiece(pos, H1, F1, true); break;
-            case G8: MovePiece(pos, H8, F8, true); break;
-            default: assert(false); break;
-        }
+    // Rehash the castling rights
+    HASH_CA;
+    pos->castlingRights &= CastlePerm[from] & CastlePerm[to];
+    HASH_CA;
 
     // Remove captured piece if any
     Piece capt = capturing(move);
@@ -262,7 +247,15 @@ bool MakeMove(Position *pos, const Move move) {
             ClearPiece(pos, to, true);
             AddPiece(pos, to, promo, true);
         }
-    }
+
+    // Move the rook during castling
+    } else if (moveIsCastle(move))
+        switch (to) {
+            case C1: MovePiece(pos, A1, D1, true); break;
+            case C8: MovePiece(pos, A8, D8, true); break;
+            case G1: MovePiece(pos, H1, F1, true); break;
+            default: MovePiece(pos, H8, F8, true); break;
+        }
 
     // Change turn to play
     sideToMove ^= 1;
@@ -289,7 +282,7 @@ void MakeNullMove(Position *pos) {
 
     // Increase ply
     pos->ply++;
-    pos->gamePly++;
+    pos->histPly++;
 
     pos->rule50 = 0;
 
@@ -298,9 +291,8 @@ void MakeNullMove(Position *pos) {
     HASH_SIDE;
 
     // Hash out en passant if there was one, and unset it
-    if (pos->epSquare != NO_SQ)
-        HASH_EP,
-        pos->epSquare = NO_SQ;
+    HASH_EP;
+    pos->epSquare = 0;
 
     assert(PositionOk(pos));
 }
@@ -309,7 +301,7 @@ void MakeNullMove(Position *pos) {
 void TakeNullMove(Position *pos) {
 
     // Decrease ply
-    pos->gamePly--;
+    pos->histPly--;
     pos->ply--;
 
     // Change side to play
