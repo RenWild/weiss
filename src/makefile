@@ -18,12 +18,10 @@
 
 # General
 EXE    = weiss
-SRC    = *.c fathom/tbprobe.c noobprobe/noobprobe.c
-OUT    = ../bin/
-COMP   = gcc
+SRC    = *.c pyrrhic/tbprobe.c noobprobe/noobprobe.c tuner/tuner.c
+CC     = gcc
 
 # Defines
-DEV    = -DDEV
 POPCNT = -msse3 -mpopcnt
 PEXT   = $(POPCNT) -DUSE_PEXT -mbmi2
 
@@ -32,23 +30,26 @@ STD    = -std=gnu11
 LIBS   = -pthread -lm
 WARN   = -Wall -Wextra -Wshadow
 
-CFLAGS = $(STD) $(WARN) -O3 -flto -march=native
-RFLAGS = $(STD) $(WARN) -O3 -flto -static
-PFLAGS = $(STD) $(WARN) -O0 -march=native -pg -p
+FLAGS  = $(STD) $(WARN) -O3 -flto
+CFLAGS = $(FLAGS) -march=native
+RFLAGS = $(FLAGS) -static
 
 # PGO
 PGODIR = "../pgo"
 PGOGEN = -fprofile-generate=$(PGODIR)
 PGOUSE = -fprofile-use=$(PGODIR)
 
-# Link winsock32 on windows
-ifeq ($(OS), Windows_NT)
-	LIBS += -lwsock32
+# Use pext if supported and not a ryzen cpu
+PROPS = $(shell echo | $(CC) -march=native -E -dM -)
+ifneq ($(findstring __BMI2__, $(PROPS)),)
+	ifeq ($(findstring znver, $(PROPS)),)
+		CFLAGS += -DUSE_PEXT
+	endif
 endif
 
 # Try to detect windows environment by seeing
-# whether the shell filters out the "s or not.
-ifeq ($(shell echo "check_quotes"), "check_quotes")
+# whether the shell filters out " or not.
+ifeq ($(shell echo "test"), "test")
 	RUNBENCH = $(EXE) bench 12 > nul 2>&1
 	CLEAN    = rmdir /s /q $(PGODIR)
 else
@@ -56,42 +57,32 @@ else
 	CLEAN    = $(RM) -rf $(PGODIR)
 endif
 
+# Link winsock32 on windows for NoobBook
+ifeq ($(OS), Windows_NT)
+	LIBS += -lwsock32
+endif
+
 # Compilations
-BASE    = $(COMP) $(CFLAGS) $(SRC) $(LIBS)
-RELEASE = $(COMP) $(RFLAGS) $(SRC) $(LIBS) -o $(OUT)$(EXE)
-BENCH   = $(BASE) -o $(EXE)
-BIN     = $(BASE) -o $(OUT)$(EXE)
+BASIC   = $(CC) $(CFLAGS) $(SRC) $(LIBS) -o $(EXE)
+RELEASE = $(CC) $(RFLAGS) $(SRC) $(LIBS) -o $(EXE)
 
-# For OpenBench
-bench-basic:
-	$(BENCH)
-
-bench-pext:
-	$(BENCH) $(PEXT)
-
-bench-pgo:
-	$(BENCH) $(PEXT) $(PGOGEN)
-	$(RUNBENCH)
-	$(BENCH) $(PEXT) $(PGOUSE)
-	$(CLEAN)
-
-# For normal use
-pext:
-	$(BIN)-pext $(PEXT)
-
+# Targets
 pgo:
-	$(BENCH) $(PEXT) $(PGOGEN)
+	$(BASIC) $(PGOGEN)
 	$(RUNBENCH)
-	$(BIN)-pext-pgo.exe $(PEXT) $(PGOUSE)
+	$(BASIC) $(PGOUSE)
 	$(CLEAN)
+
+basic:
+	$(BASIC)
+
+dev:
+	$(BASIC) -DDEV
+
+tune:
+	$(BASIC) -DTUNE -fopenmp
 
 release:
 	$(RELEASE)-nopopcnt.exe
 	$(RELEASE)-popcnt.exe   $(POPCNT)
 	$(RELEASE)-pext.exe     $(PEXT)
-
-dev:
-	$(BENCH)-dev $(PEXT) $(DEV)
-
-gprof:
-	$(COMP) $(PFLAGS) $(SRC) $(LIBS) $(PEXT) -o $(OUT)$(EXE)-prof

@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "fathom/tbprobe.h"
+#include "pyrrhic/tbprobe.h"
 #include "noobprobe/noobprobe.h"
 #include "bitboard.h"
 #include "board.h"
@@ -35,6 +35,7 @@
 #include "time.h"
 #include "threads.h"
 #include "transposition.h"
+#include "search.h"
 #include "syzygy.h"
 #include "uci.h"
 
@@ -75,17 +76,17 @@ static int QuiescenceDeltaMargin(const Position *pos) {
 
     // Optimistic we can improve our position by a pawn without capturing anything,
     // or if we have a pawn on the 7th we can hope to improve by a queen instead
-    const int DeltaBase = PawnOn7th(pos) ? Q_MG : P_MG;
+    const int DeltaBase = PawnOn7th(pos) ? 1400 : 110;
 
     // Look for possible captures on the board
     const Bitboard enemy = colorBB(!sideToMove);
 
     // Find the most valuable piece we could take and add to our base
-    return DeltaBase + ((enemy & pieceBB(QUEEN )) ? Q_MG
-                      : (enemy & pieceBB(ROOK  )) ? R_MG
-                      : (enemy & pieceBB(BISHOP)) ? B_MG
-                      : (enemy & pieceBB(KNIGHT)) ? N_MG
-                                                  : P_MG);
+    return DeltaBase + ((enemy & pieceBB(QUEEN )) ? 1400
+                      : (enemy & pieceBB(ROOK  )) ? 670
+                      : (enemy & pieceBB(BISHOP)) ? 460
+                      : (enemy & pieceBB(KNIGHT)) ? 437
+                                                  : 110);
 }
 
 // Quiescence
@@ -122,7 +123,7 @@ static int Quiescence(Thread *thread, int alpha, const int beta) {
     if (score > alpha)
         alpha = score;
 
-    int futility = score + P_EG;
+    int futility = score + 155;
 
     InitNoisyMP(&mp, &list, thread);
 
@@ -257,6 +258,11 @@ static int AlphaBeta(Thread *thread, int alpha, int beta, Depth depth, PV *pv) {
                                : lastMoveNullMove ? -history(-1).eval + 2 * Tempo
                                                   : EvalPosition(pos);
 
+    // Use ttScore as eval if it is more informative
+    if (   ttScore != NOSCORE
+        && (tte->bound & (ttScore > eval ? BOUND_LOWER : BOUND_UPPER)))
+        eval = ttScore;
+
     // Improving if not in check, and current eval is higher than 2 plies ago
     bool improving = !inCheck && pos->ply >= 2 && eval > history(-2).eval;
 
@@ -265,20 +271,24 @@ static int AlphaBeta(Thread *thread, int alpha, int beta, Depth depth, PV *pv) {
         goto move_loop;
 
     // Razoring
-    if (!pvNode && depth < 2 && eval + 640 < alpha)
+    if (  !pvNode
+        && depth < 2
+        && eval + 640 < alpha)
         return Quiescence(thread, alpha, beta);
 
     // Reverse Futility Pruning
-    if (!pvNode && depth < 7 && eval - 225 * depth + 100 * improving >= beta)
+    if (  !pvNode
+        && depth < 7
+        && eval - 225 * depth + 100 * improving >= beta)
         return eval;
 
     // Null Move Pruning
     if (  !pvNode
-        && history(-1).move != NOMOVE
-        && eval >= beta
-        && pos->nonPawnCount[sideToMove] > 0
         && depth >= 3
-        && (!ttHit || !(tte->bound & BOUND_UPPER) || ttScore >= beta)) {
+        && eval >= beta
+        && history( 0).eval >= beta
+        && history(-1).move != NOMOVE
+        && pos->nonPawnCount[sideToMove] > 0) {
 
         int R = 3 + depth / 5 + MIN(3, (eval - beta) / 256);
 
@@ -297,7 +307,9 @@ static int AlphaBeta(Thread *thread, int alpha, int beta, Depth depth, PV *pv) {
     if (  !pvNode
         && depth >= 5
         && abs(beta) < TBWIN_IN_MAX
-        && (!ttHit || !(tte->bound & BOUND_UPPER) || ttScore >= beta)) {
+        && !(   ttHit
+             && tte->bound & BOUND_UPPER
+             && ttScore < beta)) {
 
         int pbBeta = beta + 200;
 
@@ -322,15 +334,9 @@ static int AlphaBeta(Thread *thread, int alpha, int beta, Depth depth, PV *pv) {
         }
     }
 
-    // Internal iterative deepening
-    if (depth >= 4 && !ttMove) {
-
-        AlphaBeta(thread, alpha, beta, CLAMP(depth-4, 1, depth/2), pv);
-
-        tte = ProbeTT(posKey, &ttHit);
-
-        ttMove = ttHit ? tte->move : NOMOVE;
-    }
+    // Internal iterative deepening based on Rebel's idea
+    if (depth >= 4 && !ttMove)
+        depth--;
 
 move_loop:
 
@@ -350,7 +356,9 @@ move_loop:
         bool quiet = moveIsQuiet(move);
 
         // Late move pruning
-        if (!pvNode && !inCheck && quietCount > (3 + 2 * depth * depth) / (2 - improving))
+        if (   !pvNode
+            && !inCheck
+            &&  quietCount > (3 + 2 * depth * depth) / (2 - improving))
             break;
 
         __builtin_prefetch(GetEntry(KeyAfter(pos, move)));

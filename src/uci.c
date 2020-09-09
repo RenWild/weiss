@@ -20,8 +20,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "fathom/tbprobe.h"
+#include "pyrrhic/tbprobe.h"
 #include "noobprobe/noobprobe.h"
+#include "tuner/tuner.h"
 #include "board.h"
 #include "makemove.h"
 #include "move.h"
@@ -30,7 +31,6 @@
 #include "threads.h"
 #include "time.h"
 #include "transposition.h"
-#include "tune.h"
 #include "uci.h"
 
 
@@ -73,6 +73,7 @@ INLINE void UCIGo(Engine *engine, char *str) {
     ABORT_SIGNAL = false;
     ParseTimeControl(str, engine->pos.stm);
     pthread_create(&engine->threads->pthreads[0], NULL, &BeginSearch, engine);
+    pthread_detach(engine->threads->pthreads[0]);
 }
 
 // Parses a 'position' and sets up the board
@@ -134,10 +135,8 @@ static void UCISetOption(Engine *engine, char *str) {
     } else if (OptionName(str, "NoobBook")) {
 
         noobbook = !strncmp(OptionValue(str), "true", 4);
+    }
 
-    // Sets evaluation parameters (dev mode)
-    } else
-        TuneParseAll(strstr(str, "name") + 5, atoi(OptionValue(str)));
     fflush(stdout);
 }
 
@@ -149,8 +148,6 @@ static void UCIInfo() {
     printf("option name Threads type spin default %d min %d max %d\n", 1, 1, 2048);
     printf("option name SyzygyPath type string default <empty>\n");
     printf("option name NoobBook type check default false\n");
-    printf("option name Ponder type check default false\n"); // Turn on ponder stats in cutechess gui
-    TuneDeclareAll(); // Declares all evaluation parameters as options (dev mode)
     printf("uciok\n"); fflush(stdout);
 }
 
@@ -158,8 +155,6 @@ static void UCIInfo() {
 static void UCIStop(Engine *engine) {
     ABORT_SIGNAL = true;
     Wake(engine->threads);
-    if (engine->threads->pthreads[0])
-        pthread_join(engine->threads->pthreads[0], NULL);
 }
 
 // Signals the engine is ready
@@ -190,6 +185,12 @@ int main(int argc, char **argv) {
     // Benchmark
     if (argc > 1 && strstr(argv[1], "bench"))
         return Benchmark(argc, argv), 0;
+
+    // Tuner
+#ifdef TUNE
+    if (argc > 1 && strstr(argv[1], "tune"))
+        return Tune(), 0;
+#endif
 
     // Init engine
     Engine engine = { .threads = InitThreads(1) };

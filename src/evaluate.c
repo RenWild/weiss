@@ -18,13 +18,16 @@
 
 #include <stdlib.h>
 
+#include "tuner/tuner.h"
 #include "bitboard.h"
-#include "board.h"
 #include "evaluate.h"
-#include "psqt.h"
 
 
-tuneable_const int PieceTypeValue[7] = { 0,
+extern EvalTrace T;
+
+
+// Piecetype values, combines with PSQTs [piecetype]
+const int PieceTypeValue[7] = { 0,
     S(P_MG, P_EG),
     S(N_MG, N_EG),
     S(B_MG, B_EG),
@@ -32,49 +35,59 @@ tuneable_const int PieceTypeValue[7] = { 0,
     S(Q_MG, Q_EG)
 };
 
-tuneable_const int PieceValue[2][PIECE_NB] = {
+// Phase piece values, lookup used for futility pruning [phase][piece]
+const int PieceValue[2][PIECE_NB] = {
     { 0, P_MG, N_MG, B_MG, R_MG, Q_MG, 0, 0,
       0, P_MG, N_MG, B_MG, R_MG, Q_MG, 0, 0 },
     { 0, P_EG, N_EG, B_EG, R_EG, Q_EG, 0, 0,
       0, P_EG, N_EG, B_EG, R_EG, Q_EG, 0, 0 }
 };
 
+// Phase value for each piece [piece]
+const int PhaseValue[PIECE_NB] = {
+    0, 0, 1, 1, 2, 4, 0, 0,
+    0, 0, 1, 1, 2, 4, 0, 0
+};
+
 // Bonus for being the side to move
-tuneable_const int Tempo = 20;
+const int Tempo = 20;
 
 // Misc bonuses and maluses
-tuneable_static_const int PawnDoubled    = S( -6,-32);
-tuneable_static_const int PawnIsolated   = S(-28,-16);
-tuneable_static_const int PawnSupport    = S(  5,  5);
-tuneable_static_const int BishopPair     = S( 52, 72);
-tuneable_static_const int KingLineDanger = S(-12,  4);
+const int PawnDoubled    = S(-11,-26);
+const int PawnIsolated   = S(-14,-17);
+const int PawnSupport    = S( 13,  6);
+const int BishopPair     = S( 19, 97);
+const int KingLineDanger = S( -4, -2);
 
 // Passed pawn [rank]
-tuneable_static_const int PawnPassed[8] = { 0, S(-10, 1), S(-18, 10), S( -2, 33), S( 28, 76), S( 77,116), S(121,153), 0 };
+const int PawnPassed[8] = {
+    S(  0,  0), S( -8, 19), S(-12, 23), S( -7, 52),
+    S( 24, 74), S( 59,134), S(131,186), S(  0,  0),
+};
 
 // (Semi) open file for rook and queen [pt-4]
-tuneable_static_const int OpenFile[2] =     { S(51, 20), S(-13, 16) };
-tuneable_static_const int SemiOpenFile[2] = { S(17, 21), S(  8, 10) };
+const int OpenFile[2]     = { S( 39, 12), S(  0,  2) };
+const int SemiOpenFile[2] = { S( 16, 14), S(  3,  3) };
 
 // Mobility [pt-2][mobility]
-tuneable_static_const int Mobility[4][28] = {
+const int Mobility[4][28] = {
     // Knight (0-8)
-    { S(-89,-52), S(-48,-43), S( -3,-15), S(  9, -1), S( 26, 10), S( 34, 34), S( 47, 39), S( 63, 38), S( 66, 26) },
+    { S(-68,-53), S(-26,-62), S( -3,-29), S(  6,  7), S( 17, 23), S( 21, 46), S( 29, 51), S( 38, 50),
+      S( 53, 32) },
     // Bishop (0-13)
-    { S(-61,-60), S(-37,-43), S( -9,-14), S(  1, -8), S( 13,  3), S( 30, 17), S( 36, 34),
-      S( 41, 32), S( 40, 39), S( 42, 43), S( 45, 35), S( 55, 37), S( 62, 90), S( 45, 66) },
+    { S(-49,-77), S(-16,-78), S( -7,-42), S(  0,-11), S( 10,  6), S( 18, 31), S( 22, 48), S( 23, 57),
+      S( 23, 64), S( 30, 66), S( 42, 61), S( 63, 50), S( 60, 72), S( 47, 54) },
     // Rook (0-14)
-    { S(-59,-69), S(-44,-29), S(-10,-13), S( -5,-13), S( -1,  2), S(  2, 14), S(  9, 26),
-      S( 15, 30), S( 23, 36), S( 31, 45), S( 49, 42), S( 51, 48), S( 54, 48), S( 55, 49), S( 60, 61) },
+    { S(-59,-69), S(-23,-47), S(-10,-27), S(-11, -5), S( -7, 11), S( -5, 29), S( -3, 44), S(  2, 50),
+      S(  7, 56), S( 13, 61), S( 20, 67), S( 26, 68), S( 35, 68), S( 53, 56), S( 77, 36) },
     // Queen (0-27)
-    { S(-62,-48), S(-63,-35), S(-50,-44), S(-30,-43), S(-62,-40), S(-40,-37), S(-25,-30),
-      S(-14,-23), S( -5,  7), S(  6, -2), S(  8, 22), S( 19, 10), S( 20, 26), S( 23, 32), S( 34, 36),
-      S( 34, 50), S( 31, 51), S( 49, 45), S( 37, 63), S( 41, 63), S( 60, 92), S( 76, 83),
-      S( 76, 83), S( 92, 77), S(114, 98), S(116, 89), S(104,111), S(108,131) }
+    { S(-62,-48), S(-67,-36), S(-56,-46), S(-44,-47), S(-33,-43), S(-16,-42), S( -8,-36), S( -2,-24),
+      S(  3, -7), S(  9,  6), S( 14, 19), S( 19, 27), S( 23, 32), S( 26, 42), S( 28, 50), S( 28, 59),
+      S( 30, 64), S( 33, 61), S( 32, 70), S( 37, 69), S( 42, 76), S( 61, 68), S( 67, 74), S( 86, 70),
+      S(110, 91), S(114, 87), S(104,111), S(108,131) }
 };
 
 
-#ifdef CHECK_MAT_DRAW
 // Check if the board is (likely) drawn, logic from sjeng
 static bool MaterialDraw(const Position *pos) {
 
@@ -118,29 +131,43 @@ static bool MaterialDraw(const Position *pos) {
 
     return false;
 }
-#endif
 
 // Evaluates pawns
 INLINE int EvalPawns(const Position *pos, const Color color) {
 
-    int eval = 0;
+    int eval = 0, count;
 
     Bitboard pawns = colorPieceBB(color, PAWN);
 
-    // Doubled pawns
-    eval += PawnDoubled * PopCount(pawns & ShiftBB(NORTH, pawns));
+    // Doubled pawns (only when one is blocking the other from moving)
+    count = PopCount(pawns & ShiftBB(NORTH, pawns));
+    eval += PawnDoubled * count;
+    if (TRACE) T.PawnDoubled[color] += count;
 
-    eval += PawnSupport * PopCount(pawns & PawnBBAttackBB(pawns, color));
+    // Supported pawns
+    count = PopCount(pawns & PawnBBAttackBB(pawns, color));
+    eval += PawnSupport * count;
+    if (TRACE) T.PawnSupport[color] += count;
 
+    // Evaluate each individual pawn
     while (pawns) {
+
         Square sq = PopLsb(&pawns);
 
-        // Isolation penalty
-        if (!(IsolatedMask[sq] & colorPieceBB(color, PAWN)))
+        if (TRACE) T.PieceValue[PAWN-1][color]++;
+        if (TRACE) T.PSQT[PAWN-1][RelativeSquare(color, sq)][color]++;
+
+        // Isolated pawns
+        if (!(IsolatedMask[sq] & colorPieceBB(color, PAWN))) {
             eval += PawnIsolated;
-        // Passed bonus
-        if (!((PassedMask[color][sq]) & colorPieceBB(!color, PAWN)))
+            if (TRACE) T.PawnIsolated[color]++;
+        }
+
+        // Passed pawns
+        if (!((PassedMask[color][sq]) & colorPieceBB(!color, PAWN))) {
             eval += PawnPassed[RelativeRank(color, RankOf(sq))];
+            if (TRACE) T.PawnPassed[RelativeRank(color, RankOf(sq))][color]++;
+        }
     }
 
     return eval;
@@ -154,27 +181,35 @@ INLINE int EvalPiece(const Position *pos, const EvalInfo *ei, const Color color,
     Bitboard pieces = colorPieceBB(color, pt);
 
     // Bishop pair
-    if (pt == BISHOP && Multiple(pieces))
+    if (pt == BISHOP && Multiple(pieces)) {
         eval += BishopPair;
+        if (TRACE) T.BishopPair[color]++;
+    }
 
+    // Evaluate each individual piece
     while (pieces) {
+
         Square sq = PopLsb(&pieces);
 
-        // Mobility
-        eval += Mobility[pt-2][PopCount(AttackBB(pt, sq, pieceBB(ALL)) & ei->mobilityArea[color])];
+        if (TRACE) T.PieceValue[pt-1][color]++;
+        if (TRACE) T.PSQT[pt-1][RelativeSquare(color, sq)][color]++;
 
-        // if (pt == KNIGHT) {}
-        // if (pt == BISHOP) {}
-        // if (pt == ROOK) {}
-        // if (pt == QUEEN) {}
+        // Mobility
+        int mob = PopCount(AttackBB(pt, sq, pieceBB(ALL)) & ei->mobilityArea[color]);
+        eval += Mobility[pt-2][mob];
+        if (TRACE) T.Mobility[pt-2][mob][color]++;
 
         if (pt == ROOK || pt == QUEEN) {
 
-            // Open/Semi-open file bonus
-            if (!(pieceBB(PAWN) & FileBB[FileOf(sq)]))
+            // Open file
+            if (!(pieceBB(PAWN) & FileBB[FileOf(sq)])) {
                 eval += OpenFile[pt-4];
-            else if (!(colorPieceBB(color, PAWN) & FileBB[FileOf(sq)]))
+                if (TRACE) T.OpenFile[pt-4][color]++;
+            // Semi-open file
+            } else if (!(colorPieceBB(color, PAWN) & FileBB[FileOf(sq)])) {
                 eval += SemiOpenFile[pt-4];
+                if (TRACE) T.SemiOpenFile[pt-4][color]++;
+            }
         }
     }
 
@@ -188,8 +223,12 @@ INLINE int EvalKings(const Position *pos, const Color color) {
 
     Square kingSq = Lsb(colorPieceBB(color, KING));
 
-    // King safety
-    eval += KingLineDanger * PopCount(AttackBB(QUEEN, kingSq, colorBB(color) | pieceBB(PAWN)));
+    if (TRACE) T.PSQT[KING-1][RelativeSquare(color, kingSq)][color]++;
+
+    // Open lines from the king
+    int count = PopCount(AttackBB(QUEEN, kingSq, colorBB(color) | pieceBB(PAWN)));
+    eval += KingLineDanger * count;
+    if (TRACE) T.KingLineDanger[color] += count;
 
     return eval;
 }
@@ -227,25 +266,25 @@ INLINE void InitEvalInfo(const Position *pos, EvalInfo *ei, const Color color) {
 // Calculate a static evaluation of a position
 int EvalPosition(const Position *pos) {
 
-#ifdef CHECK_MAT_DRAW
     if (MaterialDraw(pos)) return 0;
-#endif
 
     EvalInfo ei;
 
     InitEvalInfo(pos, &ei, WHITE);
     InitEvalInfo(pos, &ei, BLACK);
 
-    // Material
+    // Material (includes PSQT)
     int eval = pos->material;
 
     // Evaluate pieces
     eval += EvalPieces(pos, &ei);
 
+    if (TRACE) T.eval = eval;
+
     // Adjust score by phase
-    eval = ((MgScore(eval) * pos->phase)
-         +  (EgScore(eval) * (256 - pos->phase)))
-         / 256;
+    eval =  ((MgScore(eval) * pos->phase)
+          +  (EgScore(eval) * (MidGame - pos->phase)))
+          / MidGame;
 
     // Static evaluation shouldn't spill into TB- or mate-scores
     assert(abs(eval) < TBWIN_IN_MAX);

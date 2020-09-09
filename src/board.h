@@ -21,10 +21,47 @@
 #include "types.h"
 
 
+typedef struct {
+    Key posKey;
+    Move move;
+    uint8_t epSquare;
+    uint8_t rule50;
+    uint8_t castlingRights;
+    uint8_t padding; // not used
+    int eval;
+} History;
+
+typedef struct Position {
+
+    uint8_t board[64];
+    Bitboard pieceBB[TYPE_NB];
+    Bitboard colorBB[2];
+
+    int nonPawnCount[2];
+
+    int material;
+    int phaseValue;
+    int phase;
+
+    Color stm;
+    uint8_t epSquare;
+    uint8_t rule50;
+    uint8_t castlingRights;
+
+    uint8_t ply;
+    uint16_t histPly;
+    uint16_t gameMoves;
+
+    Key key;
+
+    History gameHistory[MAXGAMEMOVES];
+
+} Position;
+
+
 extern uint8_t SqDistance[64][64];
 
 extern const int NonPawn[PIECE_NB];
-extern const int PhaseValue[PIECE_NB];
 
 // Zobrist keys
 extern uint64_t PieceKeys[PIECE_NB][64];
@@ -48,6 +85,10 @@ void MirrorBoard(Position *pos);
 // Mirrors a square horizontally
 INLINE Square MirrorSquare(const Square sq) {
     return sq ^ 56;
+}
+
+INLINE Square RelativeSquare(const Color color, const Square sq) {
+    return color == WHITE ? sq : MirrorSquare(sq);
 }
 
 // Returns the same piece of the opposite color
